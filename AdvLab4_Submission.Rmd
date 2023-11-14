@@ -1,0 +1,178 @@
+---
+title: "AdvLab4_Submission"
+author: "Akutsupis"
+date: "2023-11-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidytext)
+library(textdata)
+library(tidyverse)
+get_sentiments("afinn")
+```
+
+```{r}
+news_data <- read.csv("https://raw.githubusercontent.com/akutsupis/Adv_Geovis_Lab4/main/bbc_news.csv")
+```
+
+```{r}
+```
+
+```{r}
+head(news_data$title)
+```
+
+```{r}
+head(news_data$pubDate)
+```
+
+```{r}
+library(tidytext)
+library(textdata)
+library(tidyverse)
+
+# Assuming your dataset is named 'news_data'
+# Convert pubDate to a proper date-time object
+news_data$pubDate <- as.POSIXct(news_data$pubDate, format = "%a, %d %b %Y %H:%M:%S", tz = "GMT")
+# Datetimes created using help from ChatGPT
+```
+
+```{r}
+head(news_data$pubDate)
+```
+
+```{r}
+news_data <- news_data %>%
+  filter(!str_detect(pubDate, '2021'))
+```
+
+```{r}
+nrc_anger <- get_sentiments("nrc") %>% 
+  filter(sentiment == "anger")
+nrc_anger
+```
+
+```{r}
+library(stringr)
+## we need to make sure that the lyrics are characters
+news_data$title <- as.character(news_data$title)
+head(news_data$title)
+```
+
+```{r}
+head(news_data$pubDate)
+```
+
+```{r}
+tidy_headline <- news_data %>%
+  group_by(title) %>%
+  ungroup() %>%
+  unnest_tokens(word,title)
+```
+
+```{r}
+head(news_data)
+```
+
+```{r}
+title_sentiment <- tidy_headline %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(description, index = description, sentiment, pubDate) %>%
+  spread(sentiment, n, fill = 0) %>%
+  mutate(sentiment = positive - negative)
+```
+
+```{r}
+# Extract date and sentiment columns for plotting
+sentiment_plot_data <- title_sentiment %>%
+  select(pubDate, sentiment)
+
+# Plotting using ggplot2
+ggplot(sentiment_plot_data, aes(x = pubDate, y = sentiment, color = sentiment)) +
+  geom_line() +
+  labs(title = "Title Sentiment Over Time",
+       x = "Publishing Date",
+       y = "Sentiment Score",
+       color = "Sentiment") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(sentiment_plot_data, aes(x = pubDate, y = sentiment, color = sentiment)) +
+  geom_line() +
+  geom_smooth(method = "loess", se = FALSE) +  # Add smoothing line
+  labs(title = "Sentiment Over Time",
+       x = "Publishing Date",
+       y = "Sentiment Score",
+       color = "Sentiment") +
+  theme_minimal()
+
+```
+
+```{r}
+library(dplyr)
+library(lubridate)
+
+daily_sentiment <- sentiment_plot_data %>%
+  group_by(date = floor_date(pubDate, "day")) %>%
+  summarise(mean_sentiment = mean(sentiment))
+
+ggplot(daily_sentiment, aes(x = date, y = mean_sentiment)) +
+  geom_line() +
+  labs(title = "Daily Aggregated Sentiment",
+       x = "Date",
+       y = "Mean Sentiment Score") +
+  theme_minimal()
+```
+
+```{r}
+# Tokenize the news titles and remove stopwords
+tidy_data <- news_data %>%
+  unnest_tokens(word, title) %>%
+  anti_join(stop_words)
+
+# Perform sentiment analysis
+sentiment_data <- tidy_data %>%
+  inner_join(get_sentiments("bing"))
+
+# Get the most common sentiments
+common_sentiments <- sentiment_data %>%
+  count(sentiment, sort = TRUE)
+
+# Plot the most common sentiments
+ggplot(common_sentiments, aes(x = reorder(sentiment, n), y = n)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Sentiment Counts (Excluding Stopwords)",
+       x = "Sentiment",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+word_counts <- tidy_data %>%
+  inner_join(get_sentiments("bing")) %>%
+  count(word, sentiment, sort = TRUE) %>%
+  ungroup()
+
+word_counts
+```
+
+```{r}
+word_counts %>%
+  group_by(sentiment) %>%
+  top_n(10) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n, fill = sentiment)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~sentiment, scales = "free_y") +
+  labs(y = "Contribution to sentiment",
+       x = NULL) +
+  coord_flip()
+```
